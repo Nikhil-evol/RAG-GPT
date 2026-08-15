@@ -3,8 +3,8 @@ import os
 import shutil
 import yaml
 from dotenv import load_dotenv
-from openai import OpenAI
-from langchain_openai import OpenAIEmbeddings
+from groq import Groq
+from langchain_huggingface import HuggingFaceEmbeddings
 from pyprojroot import here
 
 load_dotenv()
@@ -22,9 +22,12 @@ class LoadConfig:
         self.persist_directory: str = str(here(app_config["directories"]["persist_directory"]))
         self.custom_persist_directory: str = str(here(app_config["directories"]["custom_persist_directory"]))
 
-        # OpenAI client — reads OPENAI_API_KEY from env automatically
-        self.openai_client: OpenAI = OpenAI()
-        self.embedding_model: OpenAIEmbeddings = OpenAIEmbeddings()
+        # Groq client — reads GROQ_API_KEY from env automatically
+        groq_api_key = os.getenv("GROQ_API_KEY")
+        if not groq_api_key:
+            raise RuntimeError("GROQ_API_KEY is not set. Add it to your .env file before running the app.")
+
+        self.llm_client = Groq(api_key=groq_api_key)
 
         # Retrieval configs
         self.data_directory: str = app_config["directories"]["data_directory"]
@@ -32,6 +35,11 @@ class LoadConfig:
         self.embedding_model_engine: str = app_config["embedding_model_config"]["engine"]
         self.chunk_size: int = app_config["splitter_config"]["chunk_size"]
         self.chunk_overlap: int = app_config["splitter_config"]["chunk_overlap"]
+
+        self.embedding_model = HuggingFaceEmbeddings(
+            model_name=self.embedding_model_engine,
+            model_kwargs={"device": "cpu"},
+        )
 
         # Summarizer config
         self.max_final_token: int = app_config["summarizer_config"]["max_final_token"]
@@ -44,7 +52,8 @@ class LoadConfig:
         # Memory
         self.number_of_q_a_pairs: int = app_config["memory"]["number_of_q_a_pairs"]
 
-        self.remove_directory(self.custom_persist_directory)
+        self.create_directory(self.persist_directory)
+        self.create_directory(self.custom_persist_directory)
 
     def create_directory(self, directory_path: str):
         """
